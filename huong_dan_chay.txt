@@ -92,6 +92,14 @@ Tất cả lệnh chạy từ thư mục gốc của project (hoc_sau/).
     # Hoặc tự động lấy 1 ảnh mẫu có sẵn trong dataset để thử:
     python predict.py
 
+4.8. Tiếp tục huấn luyện khi bị ngắt ngang chừng (Resume)
+
+    Nếu máy tính hoặc Cloud bị ngắt (mất điện, rớt mạng, hết hạn session Colab),
+    bạn chỉ cần thêm cờ `--resume` vào câu lệnh. Hệ thống sẽ tự động tìm
+    checkpoint epoch gần nhất và tiếp tục chạy:
+
+    python experiments.py --epochs 5 --batch-size 16 --runs erm --resume
+
 
 5. CÁC THAM SỐ DÒNG LỆNH
 --------------------------------------------------------------------------------
@@ -103,6 +111,7 @@ Tất cả lệnh chạy từ thư mục gốc của project (hoc_sau/).
     --runs          Danh sách thí nghiệm cần chạy
                     Giá trị hợp lệ: erm, erm_aug, group_dro, group_dro_aug
     --data-dir      Thư mục lưu dữ liệu (mặc định: data)
+    --resume        Tiếp tục huấn luyện từ epoch gần nhất (nếu có checkpoint)
 
 6. KẾT QUẢ ĐẦU RA
 --------------------------------------------------------------------------------
@@ -111,7 +120,8 @@ Sau khi chạy, thư mục results/ sẽ chứa:
 
     results/
     ├── metrics.csv                    ← Bảng tổng hợp kết quả
-    ├── erm_seed42_best.pth            ← Checkpoint tốt nhất
+    ├── erm_seed42_best.pth            ← Trọng số mô hình tốt nhất (dùng cho predict)
+    ├── erm_seed42_latest.pt           ← Checkpoint lưu trạng thái epoch để resume
     ├── erm_seed42_history.json        ← Lịch sử huấn luyện
     ├── comparison_id_ood.png          ← Biểu đồ so sánh ID vs OOD
     ├── loss_curves.png                ← Biểu đồ loss theo epoch

@@ -41,7 +41,7 @@ def set_seed(seed):
         torch.cuda.manual_seed_all(seed)
 
 
-def run_experiment(run_name, config, seed, epochs, batch_size, lr, data_dir, device):
+def run_experiment(run_name, config, seed, epochs, batch_size, lr, data_dir, device, resume=False):
     """Chạy một thí nghiệm đầy đủ: train → validate → test."""
     print(f"\n{'='*60}")
     print(f"  {run_name}  |  seed={seed}  |  epochs={epochs}")
@@ -66,38 +66,68 @@ def run_experiment(run_name, config, seed, epochs, batch_size, lr, data_dir, dev
     # Training history
     history = {"train_loss": [], "id_val": [], "ood_val": []}
     best_id_val_acc = -1.0
+    start_epoch = 1
     tag = f"{run_name}_seed{seed}"
     checkpoint_path = os.path.join(RESULTS_DIR, f"{tag}_best.pth")
+    latest_path = os.path.join(RESULTS_DIR, f"{tag}_latest.pt")
 
-    for epoch in range(1, epochs + 1):
-        print(f"\nEpoch {epoch}/{epochs}")
+    # Resume nếu có yêu cầu và checkpoint tồn tại
+    if resume and os.path.exists(latest_path):
+        print(f"  → Tìm thấy checkpoint: {latest_path}. Đang tải lại...")
+        ckpt = torch.load(latest_path, map_location=device, weights_only=False)
+        model.load_state_dict(ckpt["model_state_dict"])
+        optimizer.load_state_dict(ckpt["optimizer_state_dict"])
+        if config["method"] == "group_dro" and ckpt.get("group_weights") is not None:
+            group_weights = ckpt["group_weights"].to(device)
+        best_id_val_acc = ckpt.get("best_id_val_acc", -1.0)
+        history = ckpt.get("history", history)
+        start_epoch = ckpt["epoch"] + 1
+        print(f"  ✓ Đã phục hồi trạng thái sau Epoch {ckpt['epoch']}. Bắt đầu tiếp tục từ Epoch {start_epoch}/{epochs}!")
 
-        # Train
-        if config["method"] == "erm":
-            train_loss = train_one_epoch_erm(model, splits["train"], optimizer, device)
-        else:
-            train_loss = train_one_epoch_group_dro(
-                model, splits["train"], optimizer, device,
-                n_groups, hospital_idx, group_weights,
-            )
-        history["train_loss"].append(train_loss)
-        print(f"  Train loss: {train_loss:.4f}")
+    if start_epoch > epochs:
+        print(f"  → Mô hình đã hoàn thành đủ {epochs} epochs trước đó. Bỏ qua huấn luyện.")
+    else:
+        for epoch in range(start_epoch, epochs + 1):
+            print(f"\nEpoch {epoch}/{epochs}")
 
-        # ID validation
-        id_val_metrics = evaluate(model, splits["id_val"], device, n_groups, hospital_idx)
-        history["id_val"].append(id_val_metrics)
-        print(f"  ID Val  — Acc: {id_val_metrics['accuracy']:.4f}  AUROC: {id_val_metrics['auroc']:.4f}")
+            # Train
+            if config["method"] == "erm":
+                train_loss = train_one_epoch_erm(model, splits["train"], optimizer, device)
+            else:
+                train_loss = train_one_epoch_group_dro(
+                    model, splits["train"], optimizer, device,
+                    n_groups, hospital_idx, group_weights,
+                )
+            history["train_loss"].append(train_loss)
+            print(f"  Train loss: {train_loss:.4f}")
 
-        # OOD validation
-        ood_val_metrics = evaluate(model, splits["val"], device, n_groups, hospital_idx)
-        history["ood_val"].append(ood_val_metrics)
-        print(f"  OOD Val — Acc: {ood_val_metrics['accuracy']:.4f}  AUROC: {ood_val_metrics['auroc']:.4f}")
+            # ID validation
+            id_val_metrics = evaluate(model, splits["id_val"], device, n_groups, hospital_idx)
+            history["id_val"].append(id_val_metrics)
+            print(f"  ID Val  — Acc: {id_val_metrics['accuracy']:.4f}  AUROC: {id_val_metrics['auroc']:.4f}")
 
-        # Checkpoint selection: best ID validation accuracy
-        if id_val_metrics["accuracy"] > best_id_val_acc:
-            best_id_val_acc = id_val_metrics["accuracy"]
-            torch.save(model.state_dict(), checkpoint_path)
-            print(f"  ✓ Saved best checkpoint (ID val acc={best_id_val_acc:.4f})")
+            # OOD validation
+            ood_val_metrics = evaluate(model, splits["val"], device, n_groups, hospital_idx)
+            history["ood_val"].append(ood_val_metrics)
+            print(f"  OOD Val — Acc: {ood_val_metrics['accuracy']:.4f}  AUROC: {ood_val_metrics['auroc']:.4f}")
+
+            # Checkpoint selection: best ID validation accuracy
+            if id_val_metrics["accuracy"] > best_id_val_acc:
+                best_id_val_acc = id_val_metrics["accuracy"]
+                torch.save(model.state_dict(), checkpoint_path)
+                print(f"  ✓ Saved best checkpoint (ID val acc={best_id_val_acc:.4f})")
+
+            # Lưu latest checkpoint sau mỗi epoch để hỗ trợ resume
+            latest_ckpt = {
+                "epoch": epoch,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "group_weights": group_weights.cpu() if config["method"] == "group_dro" else None,
+                "best_id_val_acc": best_id_val_acc,
+                "history": history,
+            }
+            torch.save(latest_ckpt, latest_path)
+            print(f"  ✓ Đã lưu checkpoint epoch {epoch} vào {latest_path}")
 
     # Load best checkpoint for final test
     model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
@@ -238,6 +268,8 @@ def main():
     parser.add_argument("--runs", type=str, nargs="+", default=["erm"],
                         choices=list(EXPERIMENT_CONFIGS.keys()))
     parser.add_argument("--data-dir", type=str, default="data")
+    parser.add_argument("--resume", action="store_true",
+                        help="Resume training from the latest checkpoint if available")
     args = parser.parse_args()
 
     os.makedirs(RESULTS_DIR, exist_ok=True)
@@ -252,7 +284,7 @@ def main():
         for seed in args.seeds:
             result, history = run_experiment(
                 run_name, config, seed, args.epochs, args.batch_size,
-                args.lr, args.data_dir, device,
+                args.lr, args.data_dir, device, resume=args.resume,
             )
             all_results.append(result)
             all_histories[f"{run_name}_seed{seed}"] = history
