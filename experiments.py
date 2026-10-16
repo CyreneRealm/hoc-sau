@@ -171,11 +171,10 @@ def run_experiment(run_name, config, seed, epochs, batch_size, lr, data_dir, dev
     }, history
 
 
-def plot_results(all_results, all_histories):
+def plot_results(df, all_histories):
     """Tạo 3 biểu đồ theo yêu cầu README mục 9."""
 
     # 1. So sánh ID và OOD performance
-    df = pd.DataFrame(all_results)
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     models = df.groupby("model")
 
@@ -289,9 +288,15 @@ def main():
             all_results.append(result)
             all_histories[f"{run_name}_seed{seed}"] = history
 
-    # Lưu kết quả tổng hợp vào CSV
-    df = pd.DataFrame(all_results)
+    # Gộp kết quả với metrics.csv cũ nếu có để tránh mất dữ liệu các lần chạy trước
     csv_path = os.path.join(RESULTS_DIR, "metrics.csv")
+    new_df = pd.DataFrame(all_results)
+    if os.path.exists(csv_path) and os.path.getsize(csv_path) > 0:
+        old_df = pd.read_csv(csv_path)
+        df = pd.concat([old_df, new_df], ignore_index=True).drop_duplicates(subset=["model", "seed"], keep="last")
+    else:
+        df = new_df
+
     df.to_csv(csv_path, index=False)
     print(f"\n{'='*60}")
     print("Summary:")
@@ -332,8 +337,19 @@ def main():
         print(f"  DRO  — Avg Risk: {dro_rows['avg_group_risk'].mean():.4f}  "
               f"Worst Risk: {dro_rows['worst_group_risk'].mean():.4f}")
 
-    # Vẽ biểu đồ
-    plot_results(all_results, all_histories)
+    # Tải thêm các history cũ từ results/ (nếu có) để vẽ biểu đồ loss đầy đủ các run
+    for fname in os.listdir(RESULTS_DIR):
+        if fname.endswith("_history.json"):
+            tag = fname.replace("_history.json", "")
+            if tag not in all_histories:
+                try:
+                    with open(os.path.join(RESULTS_DIR, fname), "r") as f:
+                        all_histories[tag] = json.load(f)
+                except Exception:
+                    pass
+
+    # Vẽ biểu đồ tổng hợp
+    plot_results(df, all_histories)
 
 
 if __name__ == "__main__":
