@@ -1,0 +1,156 @@
+================================================================================
+  HƯỚNG DẪN CHẠY PROJECT: Deep Learning Under Distribution Shift
+  Dataset: Camelyon17-WILDS
+================================================================================
+
+1. YÊU CẦU HỆ THỐNG
+--------------------------------------------------------------------------------
+- Python 3.8 trở lên
+- Ổ đĩa trống tối thiểu ~10GB (để tải dataset Camelyon17)
+- Khuyến nghị có GPU NVIDIA với CUDA (nếu không có vẫn chạy được trên CPU,
+  nhưng sẽ rất chậm)
+
+2. CÀI ĐẶT MÔI TRƯỜNG
+--------------------------------------------------------------------------------
+
+Bước 1: Tạo môi trường ảo
+
+    python -m venv .venv
+
+Bước 2: Kích hoạt môi trường ảo
+
+    Windows:
+        .venv\Scripts\activate
+
+    Linux/Mac:
+        source .venv/bin/activate
+
+Bước 3: Cài đặt thư viện
+
+    pip install -r requirements.txt
+
+Bước 4 (tuỳ chọn): Nếu có GPU NVIDIA, cài PyTorch với CUDA
+
+    Truy cập: https://pytorch.org/get-started/locally/
+    Chọn cấu hình phù hợp và chạy lệnh pip tương ứng.
+
+Bước 5: Kiểm tra GPU
+
+    python -c "import torch; print(torch.cuda.is_available())"
+
+    Nếu kết quả là True → PyTorch nhận được GPU.
+    Nếu False → sẽ chạy trên CPU.
+
+3. CẤU TRÚC THƯ MỤC
+--------------------------------------------------------------------------------
+
+    hoc_sau/
+    ├── data/              ← Dữ liệu (tự động tải lần chạy đầu)
+    ├── results/           ← Kết quả, checkpoint, biểu đồ
+    ├── dataset.py         ← Quản lý dữ liệu
+    ├── model.py           ← Mô hình ResNet-18
+    ├── train.py           ← Huấn luyện (ERM + Group DRO)
+    ├── evaluate.py        ← Đánh giá mô hình
+    ├── experiments.py     ← File chính để chạy thí nghiệm
+    ├── requirements.txt   ← Danh sách thư viện
+    └── README.md          ← Tài liệu dự án
+
+4. CÁCH CHẠY THÍ NGHIỆM
+--------------------------------------------------------------------------------
+
+Tất cả lệnh chạy từ thư mục gốc của project (hoc_sau/).
+
+4.1. Chạy baseline ERM (không augmentation)
+
+    python experiments.py --epochs 5 --batch-size 16 --runs erm
+
+4.2. Chạy ERM với Data Augmentation
+
+    python experiments.py --epochs 5 --batch-size 16 --runs erm_aug
+
+4.3. Chạy Group DRO (không augmentation)
+
+    python experiments.py --epochs 5 --batch-size 16 --runs group_dro
+
+4.4. Chạy Group DRO với Augmentation
+
+    python experiments.py --epochs 5 --batch-size 16 --runs group_dro_aug
+
+4.5. Chạy tất cả 4 thí nghiệm cùng lúc
+
+    python experiments.py --epochs 5 --batch-size 16 --runs erm erm_aug group_dro group_dro_aug
+
+4.6. Chạy với nhiều random seeds (để đo độ biến thiên)
+
+    python experiments.py --epochs 5 --batch-size 16 --seeds 42 123 2026 --runs erm erm_aug group_dro group_dro_aug
+
+4.7. Kiểm thử dự đoán một ảnh mới (sau khi đã có checkpoint)
+
+    # Dự đoán ảnh chỉ định:
+    python predict.py --image "duong_dan_den_anh.png"
+
+    # Hoặc tự động lấy 1 ảnh mẫu có sẵn trong dataset để thử:
+    python predict.py
+
+
+5. CÁC THAM SỐ DÒNG LỆNH
+--------------------------------------------------------------------------------
+
+    --epochs        Số epoch huấn luyện (mặc định: 5)
+    --batch-size    Kích thước batch (mặc định: 16)
+    --lr            Learning rate (mặc định: 0.0001)
+    --seeds         Danh sách random seeds (mặc định: 42)
+    --runs          Danh sách thí nghiệm cần chạy
+                    Giá trị hợp lệ: erm, erm_aug, group_dro, group_dro_aug
+    --data-dir      Thư mục lưu dữ liệu (mặc định: data)
+
+6. KẾT QUẢ ĐẦU RA
+--------------------------------------------------------------------------------
+
+Sau khi chạy, thư mục results/ sẽ chứa:
+
+    results/
+    ├── metrics.csv                    ← Bảng tổng hợp kết quả
+    ├── erm_seed42_best.pth            ← Checkpoint tốt nhất
+    ├── erm_seed42_history.json        ← Lịch sử huấn luyện
+    ├── comparison_id_ood.png          ← Biểu đồ so sánh ID vs OOD
+    ├── loss_curves.png                ← Biểu đồ loss theo epoch
+    └── per_experiment_accuracy.png    ← Biểu đồ accuracy theo thí nghiệm
+
+    (Tương tự cho erm_aug, group_dro, group_dro_aug)
+
+7. Ý NGHĨA KẾT QUẢ
+--------------------------------------------------------------------------------
+
+Chương trình tự động phân tích và in ra:
+
+    Q1 — Domain Shift Gap:
+        So sánh ID Accuracy vs OOD Accuracy của ERM baseline.
+        Gap dương = mô hình giảm hiệu suất khi gặp dữ liệu ngoài phân phối.
+
+    Q2 — Data Augmentation Effect:
+        ΔOOD Accuracy = OOD(erm_aug) - OOD(erm).
+        Giá trị dương = augmentation giúp cải thiện OOD.
+
+    Q3 — ERM vs Group DRO:
+        So sánh Average Group Risk và Worst-Domain Risk.
+        Group DRO thường giảm worst-domain risk nhưng có thể tăng average risk.
+
+8. LƯU Ý QUAN TRỌNG
+--------------------------------------------------------------------------------
+
+- Lần chạy đầu tiên sẽ tự động tải dataset Camelyon17 (~10GB).
+  Cần kết nối internet và đủ dung lượng ổ đĩa.
+
+- Epochs=5 là cấu hình khởi đầu để kiểm tra pipeline.
+  Để có kết quả tốt hơn, có thể tăng lên 10-20 epochs.
+
+- Nếu bị lỗi hết bộ nhớ (OOM), giảm batch-size xuống 8 hoặc 4:
+    python experiments.py --epochs 5 --batch-size 8 --runs erm
+
+- Không sử dụng kết quả trên tập test để điều chỉnh siêu tham số.
+  Chỉ dùng id_val và val để chọn checkpoint.
+
+- Đây là project nghiên cứu học thuật, không phải hệ thống chẩn đoán.
+
+================================================================================

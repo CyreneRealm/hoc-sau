@@ -1,0 +1,73 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# Deep Learning / Machine Learning artifacts & weights
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.bin
+*.h5
+*.pb
+
+# Logs & Monitoring
+*.log
+runs/
+wandb/
+tensorboard/
+
+# Experiment results (bỏ qua file model nặng hoặc logs, giữ thư mục results nếu cần)
+results/*.pt
+results/*.pth
+
+# Data (bỏ qua dataset nặng, giữ lại file .gitkeep nếu có)
+data/*
+!data/.gitkeep
+
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
