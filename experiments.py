@@ -232,25 +232,17 @@ def plot_results(df, all_histories):
     plt.savefig(os.path.join(RESULTS_DIR, "loss_curves.png"), dpi=150)
     plt.close()
 
-    # 3. Per-hospital accuracy (từ test cuối cùng, dùng seed đầu tiên của mỗi run)
+    # 3. OOD Test Accuracy per Experiment
     fig, ax = plt.subplots(figsize=(10, 6))
-    seen_models = set()
-    bar_data = {}
-    for r in all_results:
-        if r["model"] not in seen_models:
-            seen_models.add(r["model"])
-            # Lấy per_group_acc từ history không có sẵn trong summary,
-            # nên chạy lại evaluate lần nữa sẽ tốn. Thay vào đó lưu vào history.
-            # ponytail: skip per-hospital chart nếu không có data, thêm khi cần
-    # Fallback: dùng OOD accuracy per model
-    if not bar_data:
-        model_names_2 = [r["model"] for r in all_results]
-        ood_accs_2 = [r["ood_accuracy"] for r in all_results]
-        ax.bar(range(len(model_names_2)), ood_accs_2, color=colors[:len(model_names_2)])
-        ax.set_xticks(range(len(model_names_2)))
-        ax.set_xticklabels(model_names_2, rotation=30, ha="right")
-        ax.set_ylabel("OOD Test Accuracy")
-        ax.set_title("OOD Test Accuracy per Experiment")
+    model_grouped = df.groupby("model")["ood_accuracy"].mean()
+    model_names_2 = list(model_grouped.index)
+    ood_accs_2 = list(model_grouped.values)
+    ax.bar(range(len(model_names_2)), ood_accs_2, color=colors[:len(model_names_2)])
+    ax.set_xticks(range(len(model_names_2)))
+    ax.set_xticklabels(model_names_2, rotation=30, ha="right")
+    ax.set_ylabel("OOD Test Accuracy")
+    ax.set_title("OOD Test Accuracy per Experiment")
+    ax.set_ylim(0, 1)
     plt.tight_layout()
     plt.savefig(os.path.join(RESULTS_DIR, "per_experiment_accuracy.png"), dpi=150)
     plt.close()
